@@ -7,7 +7,8 @@ from firebase_admin import credentials
 from firebase_admin import db
 
 # Firebase bağlantısını kurma
-cred = credentials.Certificate('credentials.json')
+# Çevresel değişkenden JSON dosyası yolunu alın
+cred = credentials.Certificate('C:/Users/MEHMET EFE/Desktop/Star_Raiders/starraiders.json')
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://starraiders-5ce09-default-rtdb.europe-west1.firebasedatabase.app/'
 })
@@ -24,20 +25,21 @@ def skoru_kaydet(nickname, puan):
 #Pygame Hazırlık
 pygame.init()
 
-#Pencere
+#Pencere ayarları
 GENISLIK, YUKSEKLIK = 1080,750
 pencere = pygame.display.set_mode((GENISLIK,YUKSEKLIK))
 pygame.display.set_caption("Star Raiders")
 icon = pygame.image.load("ufo.png")
 pygame.display.set_icon(icon)
 
-#FPS
+#FPS ayarları
 FPS = 60
 saat = pygame.time.Clock()
 
 # Yazı Fontu
 oyun_font = pygame.font.Font("oyun_font.ttf", 50)
 
+#Yazı ekleme fonksiyonu
 def metin_yaz(metin, x, y, renk=(0, 0, 0)):
     yazi = oyun_font.render(metin, True, renk)
     pencere.blit(yazi, (x, y))
@@ -61,13 +63,14 @@ class Buton:
         self.font = oyun_font
         self.kose_yaricapi = 20
 
+    #Buton çizme fonksiyonu
     def ciz(self, pencere):
         self.draw_rounded_rect(pencere, self.rect, self.renk, self.kose_yaricapi)
         metin_yazi = self.font.render(self.metin, True, (0, 0, 0))
         pencere.blit(metin_yazi, (self.rect.x + 10, self.rect.y + 10))
 
+    #Pygame üzerinde köşeleri yuvarlatılmış dikdörtgen çizme
     def draw_rounded_rect(self, surface, rect, color,radius):
-        """ Pygame üzerinde köşeleri yuvarlatılmış dikdörtgen çizme """
         # Ortadaki dikdörtgeni çiz
         pygame.draw.rect(surface, color, rect.inflate(-radius * 2, 0))
         pygame.draw.rect(surface, color, rect.inflate(0, -radius * 2))
@@ -78,15 +81,54 @@ class Buton:
         pygame.draw.ellipse(surface, color, pygame.Rect((rect.bottomleft[0], rect.bottomleft[1] - radius * 2), (radius * 2, radius * 2)))
         pygame.draw.ellipse(surface, color, pygame.Rect((rect.bottomright[0] - radius * 2, rect.bottomright[1] - radius * 2), (radius * 2, radius * 2)))
 
+    # Butona tıklanıp tıklanmadığını kontrol etme fonksiyonu
     def tiklandi_mi(self, pos):
         return self.rect.collidepoint(pos)
 
 # Giriş Ekranı
 nickname = ""
 
+# Butonlar
 baslat_buton = Buton(350, 550, 250, 80, "Oyunu Başlat")
 liderlik_buton = Buton(350, 650, 300, 80, "Liderlik Tablosu")
 
+#Giriş ekranı fonksiyonu
+def liderlik_ekrani():
+    liderlik_devam = True
+    while liderlik_devam:
+        pencere.blit(liderlik_arka_plan, (0, 0))
+        metin_yaz("Liderlik Tablosu:", 300, 50, (0,255,0))
+        ref = db.reference('skorlar')
+        liderlik_tablosu = ref.get() #Veritabanından liderlik verilerine çekme
+        if liderlik_tablosu:
+            for key, value in liderlik_tablosu.items():
+                print(key, value)  # Verileri kontrol edin
+
+            def parse_score(score):
+                try:
+                    return int(score) if score else 0
+                except ValueError:
+                    return
+
+            #Skorları büyükten küçüğe sıralama
+            sirali_liderlik = sorted(liderlik_tablosu.items(), key=lambda x: parse_score(x[1].get('Skor', 0)), reverse=True)
+            for sira, (kullanici, skor) in enumerate(sirali_liderlik[:10], 1):
+                metin_yaz(f"{sira}. {skor['Nickname']}: {skor['Skor']}", 300, 100 + sira * 50, (0, 0, 0))
+                print(f"{sira}. {skor['Nickname']}: {skor['Skor']}")
+
+        metin_yaz("[ESC] Geri", 10, 690, (0,255,0))
+
+        for etkinlik in pygame.event.get():
+            if etkinlik.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            if etkinlik.type == pygame.KEYDOWN and etkinlik.key == pygame.K_ESCAPE:
+                liderlik_devam = False # ESC tuşuna basıldığında geri gitme
+
+        pygame.display.update()
+        saat.tick(FPS)
+
+# Liderlik Ekranı
 def giris_ekrani():
     global nickname
     giris_devam = True
@@ -104,51 +146,16 @@ def giris_ekrani():
                 exit()
             if etkinlik.type == pygame.KEYDOWN:
                 if etkinlik.key == pygame.K_BACKSPACE:
-                    nickname = nickname[:-1]
+                    nickname = nickname[:-1] #Backspace ile karakter silme
                 else:
                     if len(nickname) < 15:
-                        nickname += etkinlik.unicode
+                        nickname += etkinlik.unicode #Yeni karakter ekleme
             if etkinlik.type == pygame.MOUSEBUTTONDOWN:
                 if baslat_buton.tiklandi_mi(etkinlik.pos) and nickname:
-                    baslangic_ekrani()
+                    baslangic_ekrani() #Oyunu başlatma
                     giris_devam = False
                 elif liderlik_buton.tiklandi_mi(etkinlik.pos):
-                    liderlik_ekrani()
-
-        pygame.display.update()
-        saat.tick(FPS)
-
-# Liderlik Ekranı
-def liderlik_ekrani():
-    liderlik_devam = True
-    while liderlik_devam:
-        pencere.blit(liderlik_arka_plan, (0, 0))
-        metin_yaz("Liderlik Tablosu:", 300, 50, (0,255,0))
-        ref = db.reference('skorlar')
-        liderlik_tablosu = ref.get()
-        if liderlik_tablosu:
-            for key, value in liderlik_tablosu.items():
-                print(key, value)  # Verileri kontrol edin
-
-            def parse_score(score):
-                try:
-                    return int(score) if score else 0
-                except ValueError:
-                    return
-
-            sirali_liderlik = sorted(liderlik_tablosu.items(), key=lambda x: parse_score(x[1].get('Skor', 0)), reverse=True)
-            for sira, (kullanici, skor) in enumerate(sirali_liderlik[:10], 1):
-                metin_yaz(f"{sira}. {skor['Nickname']}: {skor['Skor']}", 300, 100 + sira * 50, (0, 0, 0))
-                print(f"{sira}. {skor['Nickname']}: {skor['Skor']}")
-
-        metin_yaz("[ESC] Geri", 10, 690, (0,255,0))
-
-        for etkinlik in pygame.event.get():
-            if etkinlik.type == pygame.QUIT:
-                pygame.quit()
-                exit()
-            if etkinlik.type == pygame.KEYDOWN and etkinlik.key == pygame.K_ESCAPE:
-                liderlik_devam = False
+                    liderlik_ekrani() #Liderlik tablosuna gitme
 
         pygame.display.update()
         saat.tick(FPS)
@@ -195,12 +202,13 @@ class Oyun():
         #Font
         self.oyun_font = pygame.font.Font("oyun_font.ttf", 64)
 
+    #Oyunun her adımında güncellenmesi gereken şeyler
     def update(self):
-        self.uzaylı_konum_degistirme()
+        self.uzayli_konum_degistirme()
         self.temas()
         self.tamamlandi ()
 
-
+    # Ekranda gerekli bilgileri çizdirir
     def cizdir(self):
         puan_yazisi = self.oyun_font.render("Skor:" + str(self.puan), True, (255, 0, 255), (0, 0, 0))
         puan_yazi_konum = puan_yazisi.get_rect()
@@ -214,6 +222,7 @@ class Oyun():
         can_yazi_konum = can_yazisi.get_rect()
         can_yazi_konum.topright = (600, 10)
 
+        # Bölüme göre arka planı çizdir
         if self.bolum_no == 1:
             pencere.blit(self.arka_plan1, (0, 0))
         elif self.bolum_no == 2:
@@ -224,21 +233,23 @@ class Oyun():
             self.bitir()
             self.bolum_no = 1
 
+        # Ekrana yazılacak metinleri yerleştir
         pencere.blit(puan_yazisi, puan_yazi_konum)
         pencere.blit(bolum_no_yazisi, bolum_no_yazi_konum)
         pencere.blit(can_yazisi, can_yazi_konum)  # Can bilgisi de ekrana yazdırılıyor
 
-    def uzaylı_konum_degistirme(self):
+    def uzayli_konum_degistirme(self):
+        # Uzaylıların hareketini kontrol eder
         hareket, carpisma = False, False
         for uzayli in self.uzayli_grup.sprites():
             if uzayli.rect.left <= 0 or uzayli.rect.right >= GENISLIK:
-                hareket = True
+                hareket = True  # Uzaylıların kenara gelmesi durumu
         if hareket == True:
             for uzayli in self.uzayli_grup.sprites():
-                uzayli.rect.y += 10 * self.bolum_no
-                uzayli.yon *= -1
+                uzayli.rect.y += 10 * self.bolum_no  # Uzaylıları aşağıya hareket ettir
+                uzayli.yon *= -1 # Uzaylıların yönünü değiştir
                 if uzayli.rect.bottom >= YUKSEKLIK - 70:
-                    carpisma = True
+                    carpisma = True # Uzaylıların ekranın altına çarpması durumu
         if carpisma == True:
             self.oyuncu.can -= 1
             self.oyun_durumu()
@@ -261,6 +272,7 @@ class Oyun():
         if pygame.sprite.spritecollide(self.boss, self.oyuncu_mermi_grup,False):
             self.boss.vuruldu()  # Boss vurulduğunda vuruldu() fonksiyonunu çağır
 
+    # Oyun tamamlandığında skoru kaydeder ve bitiş ekranını gösterir
     def bitir(self):
         skoru_kaydet(nickname, self.puan)
         self.bolum_no = 1
@@ -273,6 +285,7 @@ class Oyun():
 
         self.bolum()
 
+        # Bitiş ekranı
         bittimi = True
         pencere.blit(self.bitis_arka_plan,(0,0))
         yazi1 = self.oyun_font.render("Tebrikler! Dünyanızı Kurtardınız!", True, (0, 255, 0), (0, 0, 0))
@@ -282,7 +295,7 @@ class Oyun():
         pencere.blit(yazi1, yazi1_konum)
         pencere.blit(yazi2, yazi2_konum)
         pygame.display.update()
-
+        #oyunu kapatma ve devam etme eylemleri
         while bittimi:
             for etkinlik in pygame.event.get():
                if etkinlik.type == pygame.QUIT:
@@ -293,12 +306,13 @@ class Oyun():
                        bittimi = False
                        giris_ekrani()
 
+    # Bölüm başlatma işlemleri
     def bolum(self):
         self.uzayli_mermi_grup.empty()
         self.oyuncu_mermi_grup.empty()
         self.uzayli_grup.empty()
 
-        if self.bolum_no == 3:  # Eğer üçüncü bölüme geçildiyse
+        if self.bolum_no == 3:  # Eğer üçüncü bölüme geçildiyse boss ekler
             boss = Boss(GENISLIK // 2 - 75, 100, 4, self.uzayli_mermi_grup)  # Boss'u ekle
             self.uzayli_grup.add(boss)
             for i in range(2):
@@ -316,6 +330,7 @@ class Oyun():
                     uzayli = Uzayli(64 + i * 64, 100 + j * 64, self.bolum_no, self.uzayli_mermi_grup)
                     self.uzayli_grup.add(uzayli)
 
+    # Oyun durumu kontrolü ve sıfırlama
     def oyun_durumu(self):
         self.uzayli_mermi_grup.empty()
         self.oyuncu_mermi_grup.empty()
@@ -327,15 +342,19 @@ class Oyun():
         else:
             self.durdur()
 
+    # Eğer uzaylı grubu boşsa, yeni bir bölüme geçiş yapar
     def tamamlandi(self):
         if not self.uzayli_grup:
             self.bolum_no += 1
             time.sleep(1)
             self.bolum()
 
+    # Oyun durdurulduğunda ekranda yazıları gösterir
     def durdur(self):
         durdumu = True
         global durum
+
+        # Ekranda, oyuncunun kalan canını ve devam etmek için 'ENTER' tuşunu yazdır
         yazi1 = self.oyun_font.render("Uzaylılar yüzünden " + str(self.oyuncu.can) + " canınız kaldı!",True,(0,255,0),(0,0,0))
         yazi1_konum = yazi1.get_rect()
         yazi1_konum.topleft = (100,150)
@@ -344,20 +363,25 @@ class Oyun():
         yazi2_konum = (yazi2.get_rect())
         yazi2_konum.topleft = (100, 250)
 
+        # Ekrana yazıları çizdir
         pencere.blit(yazi1,yazi1_konum)
         pencere.blit(yazi2,yazi2_konum)
-        pygame.display.update()
+        pygame.display.update() # Ekranı güncelle
+
+        # Tuşlara basılmasını kontrol et
         while durdumu:
             for etkinlik in pygame.event.get():
                 if etkinlik.type == pygame.KEYDOWN:
-                    if etkinlik.key == pygame.K_RETURN:
+                    if etkinlik.key == pygame.K_RETURN: # 'ENTER' tuşuna basılırsa oyuna devam et
                         durdumu=False
-                if etkinlik.type == pygame.QUIT:
+                if etkinlik.type == pygame.QUIT: # Çıkış yapılırsa oyunu durdur
                     durdumu = False
                     durum = False
 
     def oyun_resetleme(self):
+        # Oyun sıfırlandığında önce skoru kaydeder
         skoru_kaydet(nickname, self.puan)
+
         # Oyun değişkenlerini sıfırla
         self.bolum_no = 1
         self.puan = 0
@@ -371,13 +395,14 @@ class Oyun():
         # Yeni bölümü başlat
         self.bolum()
 
-        #Ekrana mesaj yazdır
+        #Ekrana kaybetme mesaj yazdır
         durdumu = True
         yazi1 = self.oyun_font.render("Dünyanız Ele Geçirildi!", True, (0, 255, 0),(0,0,0))
         yazi1_konum = yazi1.get_rect(center=(GENISLIK // 2, YUKSEKLIK // 2 + 90))
         yazi2 = self.oyun_font.render("Baştan Başlamak İçin 'ENTER' Tuşuna Basınız!", True, (0, 255, 0),(0,0,0))
         yazi2_konum = yazi2.get_rect(center=(GENISLIK // 2, YUKSEKLIK // 2 + 170))
 
+        # Ekranda kaybetme mesajını sürekli güncelle
         while durdumu:
             pencere.fill((0, 0, 0))  # Arka planı temizle
             pencere.blit(kaybetme_ekrani, (0, 0))
@@ -385,6 +410,7 @@ class Oyun():
             pencere.blit(yazi2, yazi2_konum)
             pygame.display.update()
 
+            # Kullanıcıdan 'ENTER' tuşuna basmasını bekle
             for etkinlik in pygame.event.get():
                 if etkinlik.type == pygame.KEYDOWN:
                     if etkinlik.key == pygame.K_RETURN:
@@ -393,12 +419,15 @@ class Oyun():
                     durdumu = False
                     pygame.quit()
                     exit()
-        giris_ekrani()
+
+        # Giriş ekranına dön
+        giris_ekrani()  # Oyuna tekrar başlamak için giriş ekranına dön
 
 class Oyuncu(pygame.sprite.Sprite):
 
     def __init__(self, oyuncu_mermi_grup):
         super().__init__()
+        # Oyuncu karakterinin görselini ve yerini belirle
         self.image = pygame.image.load("kedi_biz.png")
         self.rect = self.image.get_rect()
         self.oyuncu_mermi_grup = oyuncu_mermi_grup
@@ -411,6 +440,7 @@ class Oyuncu(pygame.sprite.Sprite):
         self.mermi_sesi = pygame.mixer.Sound("oyuncu_mermi_yeni.mp3")
 
     def update(self):
+        # Klavye tuşlarına göre oyuncu hareketini kontrol et
         tus = pygame.key.get_pressed()
 
         if tus[pygame.K_LEFT] and self.rect.left > 0:
@@ -419,6 +449,7 @@ class Oyuncu(pygame.sprite.Sprite):
             self.rect.x += self.hiz
 
     def ates(self):
+        # Eğer oyuncunun mermisi 3'ten az ise, mermi at
         if len(self.oyuncu_mermi_grup) < 3:
             self.mermi_sesi.play()
             OyuncuMermi(self.rect.centerx,self.rect.top,self.oyuncu_mermi_grup)
@@ -427,9 +458,11 @@ class Oyuncu(pygame.sprite.Sprite):
             self.a.puan += 2
 
     def reset(self):
+        # Oyuncuyu ekranın ortasına yerleştir
         self.rect.centerx = GENISLIK//2
 
     def check_collision(self, aliens, boss):
+        # Uzaylılarla ve boss ile çarpışmayı kontrol et
         for alien in aliens:
             if self.rect.colliderect(alien.rect):
                 self.can -= 1
@@ -441,6 +474,7 @@ class Uzayli(pygame.sprite.Sprite):
 
     def __init__(self, x, y, hiz, mermi_grup):
         super().__init__()
+        # Uzaylı karakterinin görselini ve yerini belirle
         self.image = pygame.image.load("uzaylimiz.png")
         self.rect = self.image.get_rect()
         self.rect.topleft = (x,y)
@@ -453,7 +487,9 @@ class Uzayli(pygame.sprite.Sprite):
         self.uzayli_mermi_sesi = pygame.mixer.Sound("uzayli_mermi_yeni.mp3")
 
     def update(self):
+        # Uzaylıyı sağa veya sola hareket ettir
         self.rect.x += self.yon * self.hiz
+        # Belli bir olasılıkla uzaylı mermisi at
         if random.randint(0,100) > 99 and len(self.mermi_grup) < 3:
             self.uzayli_mermi_sesi.play()
             self.ates()
@@ -464,6 +500,7 @@ class Uzayli(pygame.sprite.Sprite):
         self.a.puan+=5
 
     def reset(self):
+        # Uzaylıyı başlangıç noktasına geri yerleştir
         self.rect.topleft = (self.basx,self.basy)
         self.yon = 1
 
@@ -476,11 +513,13 @@ class Uzayli(pygame.sprite.Sprite):
 class Boss(pygame.sprite.Sprite):
     def __init__(self, x, y, hiz, mermi_grup):
         super().__init__()
+        # Boss karakterinin görselini ve yerini belirle
         self.image = pygame.image.load("boss.png")
         orijinal_genislik, orijinal_yukseklik = self.image.get_size()
         self.image = pygame.transform.scale(self.image, (orijinal_genislik , orijinal_yukseklik))
         self.rect = self.image.get_rect()
         self.rect.topleft = (x, y)
+        # Boss özel değişkenlerini ayarla
         self.basx = x
         self.basy = y
         self.yon = 1
@@ -490,12 +529,15 @@ class Boss(pygame.sprite.Sprite):
         self.uzayli_mermi_sesi = pygame.mixer.Sound("uzayli_mermi_yeni.mp3")
 
     def update(self):
+        # Boss'u sağa veya sola hareket ettir
         self.rect.x += self.yon * self.hiz
+        # Belli bir olasılıkla uzaylı mermisi at
         if random.randint(0, 100) > 97:
             self.uzayli_mermi_sesi.play()
             self.ates()
 
     def ates(self):
+        # Boss'tan mermiler at (düz ve eğik mermiler)
         UzayliMermi(self.rect.centerx, self.rect.bottom, self.mermi_grup, aci=0)  # Düz mermi
         UzayliMermi(self.rect.centerx, self.rect.bottom, self.mermi_grup, aci=-10)  # Sola doğru eğik mermi
         UzayliMermi(self.rect.centerx, self.rect.bottom, self.mermi_grup, aci=10)  # Sağa doğru eğik mermi
@@ -503,11 +545,13 @@ class Boss(pygame.sprite.Sprite):
         self.a.puan += 5
 
     def vuruldu(self):
+        # Boss vurulduğunda vurulma sayısını artır
         self.vurus_sayisi += 1
         if self.vurus_sayisi >= 15:
-            self.kill()
+            self.kill() # Boss 15 kez vurulursa öldür
 
     def reset(self):
+        # Boss'u başlangıç noktasına geri yerleştir
         self.rect.topleft = (self.basx,self.basy)
         self.yon = 1
         self.vurus_sayisi = 0
@@ -524,10 +568,10 @@ class OyuncuMermi(pygame.sprite.Sprite):
         oyuncu_mermi_grup.add(self)
 
     def update(self):
-        self.rect.y -= self.hiz
+        self.rect.y -= self.hiz # Mermiyi yukarı hareket ettir
         if self.rect.bottom < 0:
-            self.kill()
-        pygame.draw.rect(pencere, (255, 0, 0), self.rect, 2)
+            self.kill() # Ekranı terk eden mermiyi sil
+        pygame.draw.rect(pencere, (255, 0, 0), self.rect, 2) # Mermi çevresine kırmızı bir çerçeve çiz
 
 class UzayliMermi(pygame.sprite.Sprite):
     def __init__(self, x, y, mermi_grup, aci=0):
@@ -546,7 +590,7 @@ class UzayliMermi(pygame.sprite.Sprite):
         self.rect.x += self.hiz * math.sin(radian)
         self.rect.y += self.hiz * math.cos(radian)
         if self.rect.top > YUKSEKLIK or self.rect.right < 0 or self.rect.left > GENISLIK:
-           self.kill()
+           self.kill()  # Ekranı terk eden mermiyi sil
 
 #Mermi Grup
 oyuncu_mermi = pygame.sprite.Group()
@@ -563,18 +607,20 @@ uzayli_grup = pygame.sprite.Group()
 
 #Oyun sınıfı
 oyun = Oyun(oyuncu, uzayli_grup, oyuncu_mermi, uzayli_mermi)
-oyun.bolum()
+oyun.bolum() # İlk bölümü başlat
 
 #Oyun Döngüsü
 durum = True
 
-while durum:
-    for etkinlik in pygame.event.get():
-      if etkinlik.type == pygame.QUIT:
+while durum: # Oyun aktif olduğu sürece döngü devam eder
+    for etkinlik in pygame.event.get(): # Kullanıcı olaylarını kontrol et
+      if etkinlik.type == pygame.QUIT:  # Çıkış olayını kontrol et
           durum = False
       if etkinlik.type == pygame.KEYDOWN:
           if etkinlik.key == pygame.K_SPACE:
               oyuncu.ates()
+
+    #Güncellemeler ve ekrana çizdirme
 
     oyun.update()
     oyun.cizdir()
@@ -595,4 +641,5 @@ while durum:
     pygame.display.update()
     saat.tick(FPS)
 
+# Oyun kapatıldığında pygame'i kapat
 pygame.quit()
